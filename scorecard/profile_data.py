@@ -1,5 +1,6 @@
 import requests
 from collections import defaultdict, OrderedDict
+from datetime import datetime
 
 from django.conf import settings
 
@@ -15,29 +16,40 @@ class MuniApiClient(object):
         self.line_item_params = self.get_line_item_params()
 
         self.results = defaultdict(dict)
+        today = datetime.now()
+        # Financial years are from 1 July to 30 June
+        # 31 December 2015 is therefore in financial year 2016
+        self.financial_year = today.year if today.month <= 6 else today.year + 1
+
         self.years = set()
         for line_item, query_params in self.line_item_params.iteritems():
+            if line_item == 'op_exp_actual_monthly':
+                import ipdb; ipdb.set_trace()
             self.results[line_item], self.years = self.results_from_api(query_params, self.years)
 
     def results_from_api(self, query_params, years):
 
         if query_params['query_type'] == 'aggregate':
+            """
+            e.g.
+            http://127.0.0.1:8888/api/cubes/capital/aggregate?order=financial_period.period:desc&aggregates=asset_register_summary.sum&cut=demarcation.code:"BUF"|amount_type.label:"Adjusted Budget"|item.code:"4100"&drilldown=item.code|item.label|financial_period.period|financial_year_end.year&page=0'
+            """
             url = self.API_URL + query_params['cube'] + '/aggregate'
             params = {
                 'aggregates': query_params['aggregate'],
                 'cut': '|'.join('{!s}:{!s}'.format(
-                    k, ';'.join('{!r}'.format(item) for item in v))
-                    for (k, v) in query_params['cut'].iteritems()
+                    name, ';'.join('{!r}'.format(item) for item in value))
+                    for (name, value) in query_params['cut'].iteritems()
                     ).replace("'", '"'),
-                'drilldown': 'item.code|item.label|financial_period.period',
+                'drilldown': 'item.code|item.label|financial_period.period|financial_year_end.year|period_length.length',
                 'page': 0,
                 'order': 'financial_period.period:desc',
             }
         elif query_params['query_type'] == 'facts':
             url = self.API_URL + query_params['cube'] + '/facts'
             params = {
-                'cut': '|'.join('{!s}:{!r}'.format(k, v)
-                    for (k, v) in query_params['cut'].iteritems()
+                'cut': '|'.join('{!s}:{!r}'.format(name, value)
+                    for (name, value) in query_params['cut'].iteritems()
                 ).replace("'", '"'),
                 'fields': ','.join(field for field in query_params['fields']),
                 'page': 0
@@ -61,18 +73,26 @@ class MuniApiClient(object):
         Return results and years.
         Results are the values we received from the API in the following format:
         {
-            '4100': {2015: 11981070609.0}, {2014: 844194485.0}, {2013: 593485329.0}
+            '4100': 'year': {2015: 11981070609.0, 2014: 844194485.0, 2013: 593485329.0},
+                    'month': {2015: {1: 11981070609.0, 2: 844194485.0, 3: 593485329.0},
+                             2014: {1: 11981070609.0, 2: 844194485.0, 3: 593485329.0}
         }
 
         Years is a set of years in the results we received,
         used determine which periods we use when presenting results.
         """
-        results = {}
+        results = defaultdict(dict)
         for code in query_params['cut']['item.code']:
-          results[code] = OrderedDict([
-              (c['financial_period.period'], c[query_params['aggregate']])
-              for c in response['cells'] if c['item.code'] == code])
-          years |= set([int(year) for year in results[code].keys()])
+            if query_params['cut']['period_length.length'] == ['year']:
+                results[code]['year'] = OrderedDict([
+                    (c['financial_period.period'], c[query_params['aggregate']])
+                     for c in response['cells'] if c['item.code'] == code])
+                years |= set([int(year) for year in results[code]['year'].keys()])
+            else:
+                for year in sorted(query_params['cut']['financial_year_end.year'], reverse=True):
+                    results[code]['month'] = {year: OrderedDict([
+                    (c['financial_period.period'], c[query_params['aggregate']])
+                     for c in response['cells'] if c['item.code'] == code and c['financial_year_end.year'] == year])}
 
         return results, years
 
@@ -102,9 +122,21 @@ class MuniApiClient(object):
                 'aggregate': 'amount.sum',
                 'cut': {
                     'item.code': ['4600'],
-                    'amount_type.label': ['Audited Actual'],
+                    'amount_type.label': ['Audited Actual', 'Actual'],
                     'demarcation.code': [self.geo_code],
                     'period_length.length': ['year'],
+                },
+                'query_type': 'aggregate',
+            },
+            'op_exp_actual_monthly': {
+                'cube': 'incexp',
+                'aggregate': 'amount.sum',
+                'cut': {
+                    'item.code': ['4600'],
+                    'amount_type.label': ['Actual'],
+                    'demarcation.code': [self.geo_code],
+                    'period_length.length': ['month'],
+                    'financial_year_end.year': [2016, 2015]
                 },
                 'query_type': 'aggregate',
             },
@@ -115,6 +147,7 @@ class MuniApiClient(object):
                     'item.code': ['4600'],
                     'amount_type.label': ['Adjusted Budget'],
                     'demarcation.code': [self.geo_code],
+                    'period_length.length': ['year'],
                 },
                 'query_type': 'aggregate',
             },
@@ -147,6 +180,7 @@ class MuniApiClient(object):
                     'item.code': ['4100'],
                     'amount_type.label': ['Adjusted Budget'],
                     'demarcation.code': [self.geo_code],
+                    'period_length.length': ['year'],
                 },
                 'query_type': 'aggregate',
             },
@@ -290,6 +324,12 @@ class IndicatorCalculator(object):
                 values[year] = None
 
         return values
+
+    def interim_cash_coverage(self):
+        values = OrderedDict()
+        latest_q = sorted(self.results['op_exp_actual_monthly']['4600'], reverse=True)[:3]
+        import ipdb; ipdb.set_trace()
+        return
 
     def op_budget_diff(self):
         values = OrderedDict()

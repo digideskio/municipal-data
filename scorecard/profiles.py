@@ -12,6 +12,7 @@ def get_profile(geo_code, geo_level, profile_name=None):
     return {
         'total_population': total_pop,
         'cash_coverage': indicator_calc.cash_coverage(),
+        'iterim_cash_coverage': indicator_calc.interim_cash_coverage(),
         'op_budget_diff': indicator_calc.op_budget_diff(),
         'cap_budget_diff': indicator_calc.cap_budget_diff(),
         'rep_maint_perc_ppe': indicator_calc.rep_maint_perc_ppe(),
