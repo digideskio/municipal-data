@@ -46,6 +46,29 @@ def docs(request):
 
 
 @xframe_options_exempt
+def docs_cube(request, cube_name):
+    cube = cube_manager.get_cube(cube_name)
+    (model,) = cube.model.to_dict(),
+    if 'item' in model['dimensions'].keys():
+        if 'position_in_return_form' \
+           in model['dimensions']['item']['attributes'].keys():
+            items = cube.members('item',
+                                 order='item.position_in_return_form:asc')['data']
+        else:
+            items = cube.members('item')['data']
+    else:
+        items = None
+
+    return render(request, 'docs_cube.html', {
+        'cube': {
+            'model': model,
+            'name': cube_name,
+            'items': items,
+        },
+    })
+
+
+@xframe_options_exempt
 def explore(request, cube_name):
     cubes = []
     for name in cube_manager.list_cubes():

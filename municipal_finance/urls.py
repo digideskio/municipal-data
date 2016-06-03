@@ -6,14 +6,15 @@ from . import views
 # Used to cache expensive API calls, since our data only changes occasionally
 # This cache is reset on each deployment. Corresponding caching headers are
 # sent to the client, too.
-API_CACHE_SECS = 12 * 60 * 60
+API_CACHE_SECS = 30 * 24 * 60 * 60
 
 urlpatterns = [
     url(r'^$', cache_page(API_CACHE_SECS)(views.index), name='homepage'),
-    url(r'^docs$', views.docs),
+    url(r'^docs$', cache_page(API_CACHE_SECS)(views.docs)),
+    url(r'^docs/(?P<cube_name>[\w_]+)$', cache_page(API_CACHE_SECS)(views.docs_cube)),
     url(r'^explore/(?P<cube_name>[\w_]+)/embed.html$', views.embed),
     url(r'^explore/(?P<cube_name>[\w_]+)/$', views.explore),
-    url(r'^table/(?P<cube_name>[\w_]+)/$', views.table, name='table'),
+    url(r'^table/(?P<cube_name>[\w_]+)/$', cache_page(API_CACHE_SECS)(views.table), name='table'),
     url(r'^api/status$', views.status),
     url(r'^api/cubes$', cache_page(API_CACHE_SECS)(views.cubes)),
     url(r'^api/cubes/(?P<cube_name>[\w_]+)/model$', cache_page(API_CACHE_SECS)(views.model)),
