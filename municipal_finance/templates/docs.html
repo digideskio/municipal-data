@@ -52,7 +52,7 @@
 
     <ul>
       {% for cube in cubes|dictsort:"name" %}
-        <li><a href="#cube-{{ cube.name }}">{{ cube.model.label }}</a></li>
+        <li><a href="/docs/cube/{{ cube.name }}">{{ cube.model.label }}</a></li>
       {% endfor %}
     </ul>
 
