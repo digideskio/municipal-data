@@ -17,26 +17,26 @@ def get_cube(name):
 @xframe_options_exempt
 def index(request):
     cubes = []
+    multipage_index = []
     for cube_name in cube_manager.list_cubes():
         cube = cube_manager.get_cube(cube_name)
-        (model,) = cube.model.to_dict(),
+        model = cube.model.to_dict()
         if 'item' in model['dimensions'].keys():
-            if 'position_in_return_form' \
-               in model['dimensions']['item']['attributes'].keys():
-                items = cube.members('item',
-                                     order='item.position_in_return_form:asc')['data']
-            else:
-                items = cube.members('item')['data']
-        else:
-            items = None
+            items = cube.members('item')['data']
+            for item in items:
+                multipage_index.append({
+                    'id': "/docs/cube/%s" % cube_name,
+                    'title': "%s" % item['item.label'],
+                    'body': '',
+                })
         cubes.append({
             'model': model,
             'name': cube_name,
-            'items': items,
         })
 
     return render(request, 'docs.html', {
         'cubes': cubes,
+        'multipage_index': multipage_index,
     })
 
 
